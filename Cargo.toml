@@ -1,0 +1,8 @@
+[package]
+name = "capgains"
+version = "0.1.0"
+authors = ["Oliver Lee <oliverzlee@gmail.com>"]
+
+[dependencies]
+csv = "*"
+
