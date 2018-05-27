@@ -1,3 +1,4 @@
+extern crate chrono;
 extern crate csv;
 extern crate serde;
 #[macro_use]
@@ -151,7 +152,13 @@ fn load_account(filename: &String) -> Result<Account, Box<error::Error>> {
     Ok(Account::new(vec))
 }
 
-fn print_sell_summary(summary: &Vec<(Record, SellRecord)>) {
+fn print_sell_summary(mut summary: Vec<(Record, SellRecord)>) {
+    summary.sort_unstable_by(|a, b| {
+        let date_a = chrono::NaiveDate::parse_from_str(&a.0.date, "%m/%d/%Y").unwrap();
+        let date_b = chrono::NaiveDate::parse_from_str(&b.0.date, "%m/%d/%Y").unwrap();
+        date_b.cmp(&date_a)
+    });
+
     println!("Selling the following records:");
 
     let mut amount = 0.0;
@@ -189,7 +196,7 @@ fn run(filename: &String, target_amount: f64) {
     //    println!("{:?}", record);
     //}
     let result = account.minimum_cap_gains(&fund_prices, target_amount).unwrap();
-    print_sell_summary(&result);
+    print_sell_summary(result);
 }
 
 fn main() {
