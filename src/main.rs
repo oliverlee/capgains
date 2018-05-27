@@ -105,6 +105,7 @@ impl Account {
         &self,
         fund_prices: &HashMap<String, f64>,
         sell_target: f64,
+        tax_rate: f64,
     ) -> Result<Vec<(Record, SellRecord)>, AccountError> {
         let sell_records = self.make_sell_records(fund_prices)?;
 
@@ -115,11 +116,14 @@ impl Account {
         indices.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         let mut amount = 0.0;
+        let mut cap_gains = 0.0;
         let mut result = Vec::new();
         for (_, i) in indices {
             result.push((self.records[i].clone(), sell_records[i].clone()));
             amount += sell_records[i].amount;
-            if amount > sell_target {
+            cap_gains += sell_records[i].cap_gains;
+
+            if (amount - cap_gains*tax_rate) > sell_target {
                 break;
             }
         }
@@ -152,7 +156,7 @@ fn load_account(filename: &String) -> Result<Account, Box<error::Error>> {
     Ok(Account::new(vec))
 }
 
-fn print_sell_summary(mut summary: Vec<(Record, SellRecord)>) {
+fn print_sell_summary(mut summary: Vec<(Record, SellRecord)>, tax_rate: f64) {
     summary.sort_unstable_by(|a, b| {
         let date_a = chrono::NaiveDate::parse_from_str(&a.0.date, "%m/%d/%Y").unwrap();
         let date_b = chrono::NaiveDate::parse_from_str(&b.0.date, "%m/%d/%Y").unwrap();
@@ -172,9 +176,13 @@ fn print_sell_summary(mut summary: Vec<(Record, SellRecord)>) {
     println!("will result in");
     println!("amount: {:.2}", amount);
     println!("cap gains: {:.2}", cap_gains);
+    if tax_rate != 0.0 {
+        println!("taxes: {:.2}", cap_gains*tax_rate);
+        println!("net amount: {:.2}", amount - cap_gains*tax_rate);
+    }
 }
 
-fn run(filename: &String, target_amount: f64) {
+fn run(filename: &String, target_amount: f64, tax_rate: f64) {
     let account = load_account(filename).unwrap();
 
     //println!("Got account with funds:");
@@ -195,8 +203,8 @@ fn run(filename: &String, target_amount: f64) {
     //for record in &sell_records {
     //    println!("{:?}", record);
     //}
-    let result = account.minimum_cap_gains(&fund_prices, target_amount).unwrap();
-    print_sell_summary(result);
+    let result = account.minimum_cap_gains(&fund_prices, target_amount, tax_rate).unwrap();
+    print_sell_summary(result, tax_rate);
 }
 
 fn main() {
@@ -209,8 +217,15 @@ fn main() {
 
     let filename = &args[1];
     let target_amount = f64::from_str(&args[2]).unwrap();
+    let mut tax_rate = 0.0;
+
+    if args.len() > 3 {
+        tax_rate = f64::from_str(&args[3]).unwrap();
+        println!("using a tax rate of {}", tax_rate);
+    }
+
     println!("Reading file {} with a target sell amount of {}", filename, target_amount);
 
-    run(filename, target_amount);
+    run(filename, target_amount, tax_rate);
     process::exit(0);
 }
