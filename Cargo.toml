@@ -7,3 +7,4 @@ authors = ["Oliver Lee <oliverzlee@gmail.com>"]
 csv = "1"
 serde = "1"
 serde_derive = "1"
+priority-queue = "0.4"
