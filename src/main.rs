@@ -109,7 +109,7 @@ impl Account {
 
         let mut indices = Vec::new();
         for (i, item) in sell_records.iter().enumerate() {
-            indices.push((-1.0*item.cap_gains_ratio, i));
+            indices.push((item.cap_gains_ratio, i));
         }
         indices.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
