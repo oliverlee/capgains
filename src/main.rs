@@ -17,17 +17,17 @@ use serde::{de, Deserialize, Deserializer};
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct Record {
-    #[serde(rename = "Date")]
-    date: String,
+    #[serde(rename = "Date", deserialize_with = "de_date_from_str")]
+    date: chrono::NaiveDate,
     #[serde(rename = "Fund")]
     fund: String,
     #[serde(rename = "Transaction type")]
     transaction_type: String,
     #[serde(rename = "Shares transacted")]
     num_shares: f64,
-    #[serde(rename = "Share price", deserialize_with = "de_from_str")]
+    #[serde(rename = "Share price", deserialize_with = "de_usd_from_str")]
     share_price: f64,
-    #[serde(rename = "Amount", deserialize_with = "de_from_str")]
+    #[serde(rename = "Amount", deserialize_with = "de_usd_from_str")]
     amount: f64, // dependent field
 }
 
@@ -58,7 +58,15 @@ impl error::Error for AccountError {
     }
 }
 
-fn de_from_str<'de, D>(deserializer: D) -> Result<f64, D::Error>
+fn de_date_from_str<'de, D>(deserializer: D) -> Result<chrono::NaiveDate, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: &str = Deserialize::deserialize(deserializer)?;
+    chrono::NaiveDate::parse_from_str(s, "%m/%d/%Y").map_err(de::Error::custom)
+}
+
+fn de_usd_from_str<'de, D>(deserializer: D) -> Result<f64, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -95,10 +103,7 @@ impl Account {
 
         let mut vec = Vec::new();
         for record in &self.records {
-            let date_purchased = match chrono::NaiveDate::parse_from_str(&record.date, "%m/%d/%Y") {
-                Ok(date) => date,
-                Err(e) => return Err(AccountError(error::Error::description(&e).to_string())),
-            };
+            let date_purchased = record.date;
             let fund = record.fund.clone(); // TODO use reference, lifetimes
             let num_shares = record.num_shares;
             let share_price_purchased = record.share_price;
