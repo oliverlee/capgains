@@ -15,7 +15,6 @@ use std::str::FromStr;
 use serde::{de, Deserialize, Deserializer};
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 struct Record {
     #[serde(rename = "Date", deserialize_with = "de_date_from_str")]
     date: chrono::NaiveDate,
@@ -43,7 +42,15 @@ struct SellRecord {
     cap_gains_ratio: f64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, Deserialize)]
+struct FundPrice {
+    #[serde(rename = "Fund")]
+    fund: String,
+    #[serde(rename = "Share price", deserialize_with = "de_usd_from_str")]
+    share_price: f64,
+}
+
+#[derive(Clone, Debug)]
 struct AccountError(String);
 
 impl fmt::Display for AccountError {
@@ -195,7 +202,7 @@ impl Account {
     }
 }
 
-fn load_account(filename: &String) -> Result<Account, Box<error::Error>> {
+fn load_account(filename: &str) -> Result<Account, csv::Error> {
     let mut rdr = csv::Reader::from_path(filename)?;
     let mut vec = Vec::new();
     let mut error: Option<csv::Error> = None;
@@ -204,15 +211,29 @@ fn load_account(filename: &String) -> Result<Account, Box<error::Error>> {
         match result {
             Ok(record) => {
                 match error {
-                    Some(error) => return Err(Box::new(error)),
+                    Some(error) => return Err(error),
                     None => vec.push(record),
                 };
             }
-            Err(e) => error = Some(e),
+            Err(err) => error = Some(err),
         };
     }
 
     Ok(Account::new(vec))
+}
+
+fn load_fund_prices(filename: &str) -> Result<HashMap<String, f64>, csv::Error> {
+    let mut fund_prices: HashMap<String, f64> = HashMap::new();
+    let mut rdr = csv::Reader::from_path(filename)?;
+
+    for result in rdr.deserialize::<FundPrice>() {
+        match result {
+            Ok(fp) => fund_prices.insert(fp.fund, fp.share_price),
+            Err(err) => return Err(err),
+        };
+    }
+
+    Ok(fund_prices)
 }
 
 fn print_sell_summary(mut summary: Vec<SellRecord>, tax_rate: f64) {
@@ -239,23 +260,10 @@ fn print_sell_summary(mut summary: Vec<SellRecord>, tax_rate: f64) {
     }
 }
 
-fn run(filename: &String, target_amount: f64, tax_rate: f64) {
-    let account = load_account(filename).unwrap();
+fn run(account_filename: &str, fundprice_filename: &str, target_amount: f64, tax_rate: f64) {
+    let account = load_account(account_filename).unwrap();
+    let fund_prices = load_fund_prices(fundprice_filename).unwrap();
 
-    //println!("Got account with funds:");
-    //for fund in account.funds.iter() {
-    //    println!("{}", fund);
-    //}
-
-    // hardcode the fund prices for now
-    let mut fund_prices: HashMap<String, f64> = HashMap::new();
-    fund_prices.insert("Total Stock Mkt Idx Adm".to_string(), 68.44);
-    fund_prices.insert("Tot Intl Stock Ix Admiral".to_string(), 30.31);
-
-    //let sell_records = account.make_sell_records(&fund_prices).unwrap();
-    //for record in &sell_records {
-    //    println!("{:?}", record);
-    //}
     let result = account
         .minimum_cap_gains(&fund_prices, target_amount, tax_rate)
         .unwrap();
@@ -265,25 +273,32 @@ fn run(filename: &String, target_amount: f64, tax_rate: f64) {
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 3 {
-        println!("Please supply a csv file with a transaction history and a target sell amount.");
+    if args.len() < 4 {
+        println!("Calculate the records to sell to minimize capital gains.");
+        println!("usage: ./capgains <account_file> <fundprice_file> sell_target [tax_rate]");
+        println!("\naccount_file: csv file with the following fields -- Date,Fund,Transaction type,Shares transacted,Share price,Amount");
+        println!("fundprice_file: csv file with the following fields -- Fund,Share price");
+        println!("sell_target: Target amount to sell.");
+        println!("tax_rate: A flat tax rate to apply to capital gains. Taxes will be accounted for when selecting records to sell.");
+        println!("");
         process::exit(1);
     }
 
-    let filename = &args[1];
-    let target_amount = f64::from_str(&args[2]).unwrap();
+    let account_filename = &args[1];
+    let fundprice_filename = &args[2];
+    let target_amount = f64::from_str(&args[3]).unwrap();
     let mut tax_rate = 0.0;
 
-    if args.len() > 3 {
-        tax_rate = f64::from_str(&args[3]).unwrap();
+    if args.len() > 4 {
+        tax_rate = f64::from_str(&args[4]).unwrap();
         println!("using a tax rate of {}", tax_rate);
     }
 
     println!(
         "Reading file {} with a target sell amount of {}",
-        filename, target_amount
+        account_filename, target_amount
     );
 
-    run(filename, target_amount, tax_rate);
+    run(account_filename, fundprice_filename, target_amount, tax_rate);
     process::exit(0);
 }
