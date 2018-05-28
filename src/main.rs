@@ -242,37 +242,36 @@ fn print_sell_summary(mut summary: Vec<SellRecord>, tax_rate: f64) {
 
     let mut amount = 0.0;
     let mut cap_gains = 0.0;
+    println!("  {:>10}, {:>25}, {:>10}, {:>10}, {:>10}", "date", "fund", "amount", "cap gains", "shares");
     for srec in summary {
         // print out when selling a whole number of shares as it's not too common
-        let whole = if srec.num_shares.fract() == 0.0 {
-            " [whole shares]"
+        let shares = if srec.num_shares.fract() == 0.0 {
+            format!("{:>10} [whole]", srec.num_shares)
         } else {
-            ""
+            format!("{:10.3}", srec.num_shares)
         };
         println!(
-            "  {},\t{},\t{} shares{}",
-            srec.date_purchased, srec.fund, srec.num_shares, whole
+            "  {}, {:>25}, {:10.3}, {:10.3}, {}",
+            srec.date_purchased, srec.fund, srec.amount, srec.cap_gains, shares
         );
         amount += srec.amount;
         cap_gains += srec.cap_gains;
     }
 
     println!("will result in");
-    println!("amount: {:.2}", amount);
-    println!("cap gains: {:.2}", cap_gains);
+    println!("amount:     {:10.3}", amount);
+    println!("cap gains:  {:10.3}", cap_gains);
     if tax_rate != 0.0 {
-        println!("taxes: {:.2}", cap_gains * tax_rate);
-        println!("net amount: {:.2}", amount - cap_gains * tax_rate);
+        println!("taxes:      {:10.3}", cap_gains * tax_rate);
+        println!("net amount: {:10.3}", amount - cap_gains * tax_rate);
     }
 }
 
-fn run(account_filename: &str, fundprice_filename: &str, target_amount: f64, tax_rate: f64) {
+fn run(account_filename: &str, fundprice_filename: &str, sell_target: f64, tax_rate: f64) {
     let account = load_account(account_filename).unwrap();
     let fund_prices = load_fund_prices(fundprice_filename).unwrap();
 
-    let result = account
-        .minimum_cap_gains(&fund_prices, target_amount, tax_rate)
-        .unwrap();
+    let result = account.minimum_cap_gains(&fund_prices, sell_target, tax_rate).unwrap();
     print_sell_summary(result, tax_rate);
 }
 
@@ -292,19 +291,19 @@ fn main() {
 
     let account_filename = &args[1];
     let fundprice_filename = &args[2];
-    let target_amount = f64::from_str(&args[3]).unwrap();
-    let mut tax_rate = 0.0;
+    let sell_target = f64::from_str(&args[3]).unwrap();
 
+    println!("Reading account information from: {}", account_filename);
+    println!("Reading fund price from: {}", fundprice_filename);
+    println!("Minimizing capital gains for target sell amount of: {}", sell_target);
+
+    let mut tax_rate = 0.0;
     if args.len() > 4 {
         tax_rate = f64::from_str(&args[4]).unwrap();
-        println!("using a tax rate of {}", tax_rate);
+        println!("Applying a tax rate of {}%", 100.0*tax_rate);
     }
+    println!("");
 
-    println!(
-        "Reading file {} with a target sell amount of {}",
-        account_filename, target_amount
-    );
-
-    run(account_filename, fundprice_filename, target_amount, tax_rate);
+    run(account_filename, fundprice_filename, sell_target, tax_rate);
     process::exit(0);
 }
