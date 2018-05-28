@@ -1,3 +1,5 @@
+#![feature(map_get_key_value)]
+
 extern crate chrono;
 extern crate csv;
 extern crate serde;
@@ -31,9 +33,9 @@ struct Record {
 }
 
 #[derive(Clone, Debug)]
-struct SellRecord {
+struct SellRecord<'a> {
     date_purchased: chrono::NaiveDate,
-    fund: String,
+    fund: &'a str,
     num_shares: f64,
     share_price_purchased: f64,
     share_price: f64,
@@ -91,16 +93,18 @@ impl Account {
     fn new(records: Vec<Record>) -> Self {
         let mut funds = HashSet::new();
         for record in &records {
-            funds.insert(record.fund.clone());
+            if !funds.contains(&record.fund) {
+                funds.insert(record.fund.clone());
+            }
         }
 
         Account { records, funds }
     }
 
-    fn make_sell_records(
+    fn make_sell_records<'a>(
         &self,
-        fund_prices: &HashMap<String, f64>,
-    ) -> Result<Vec<SellRecord>, AccountError> {
+        fund_prices: &'a HashMap<String, f64>,
+    ) -> Result<Vec<SellRecord<'a>>, AccountError> {
         for fund in self.funds.iter() {
             if !fund_prices.contains_key(fund) {
                 let s = format!("Missing price for fund: {}", fund);
@@ -111,7 +115,7 @@ impl Account {
         let mut vec = Vec::new();
         for record in &self.records {
             let date_purchased = record.date;
-            let fund = record.fund.clone(); // TODO use reference, lifetimes
+            let fund = fund_prices.get_key_value(&record.fund).unwrap().0;
             let num_shares = record.num_shares;
             let share_price_purchased = record.share_price;
             let share_price = *fund_prices.get(&record.fund).unwrap();
@@ -134,12 +138,12 @@ impl Account {
         Ok(vec)
     }
 
-    fn minimum_cap_gains(
+    fn minimum_cap_gains<'a>(
         &self,
-        fund_prices: &HashMap<String, f64>,
+        fund_prices: &'a HashMap<String, f64>,
         sell_target: f64,
         tax_rate: f64,
-    ) -> Result<Vec<SellRecord>, AccountError> {
+    ) -> Result<Vec<SellRecord<'a>>, AccountError> {
         let mut sell_records = self.make_sell_records(fund_prices)?;
 
         let mut indices = Vec::new();
