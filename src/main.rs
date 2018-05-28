@@ -91,11 +91,15 @@ impl Account {
         let mut vec = Vec::new();
         for record in &self.records {
             let price = fund_prices.get(&record.fund).unwrap();
-            let amount = price*record.num_shares;
-            let cap_gains = (price - record.share_price)*record.num_shares;
-            let cap_gains_ratio = cap_gains/amount;
+            let amount = price * record.num_shares;
+            let cap_gains = (price - record.share_price) * record.num_shares;
+            let cap_gains_ratio = cap_gains / amount;
 
-            vec.push(SellRecord { amount, cap_gains, cap_gains_ratio } );
+            vec.push(SellRecord {
+                amount,
+                cap_gains,
+                cap_gains_ratio,
+            });
         }
 
         Ok(vec)
@@ -119,17 +123,46 @@ impl Account {
         let mut cap_gains = 0.0;
         let mut result = Vec::new();
         for (_, i) in indices {
-            result.push((self.records[i].clone(), sell_records[i].clone()));
-            amount += sell_records[i].amount;
-            cap_gains += sell_records[i].cap_gains;
+            let srec = &sell_records[i];
+            amount += srec.amount;
+            cap_gains += srec.cap_gains;
 
-            if (amount - cap_gains*tax_rate) > sell_target {
+            if (amount - cap_gains * tax_rate) > sell_target {
+                // see if we can sell some (not all) of the shares of this record
+                let mut x = srec.amount - srec.cap_gains * tax_rate;
+                x /= self.records[i].num_shares;
+
+                // get pre-record values for amount and cap gains
+                let a = amount - srec.amount;
+                let c = cap_gains - srec.cap_gains;
+
+                // get number of shares needed to reach sell target
+                // shares can only be sold as integer amounts
+                let n = ((sell_target - (a - c * tax_rate)) / x).trunc() + 1.0;
+
+                if n < self.records[i].num_shares.trunc() {
+                    result.push((
+                        Record {
+                            num_shares: n as f64,
+                            ..self.records[i].clone()
+                        },
+                        SellRecord {
+                            amount: srec.amount * n/self.records[i].num_shares,
+                            cap_gains: srec.cap_gains * n/self.records[i].num_shares,
+                            cap_gains_ratio: srec.cap_gains_ratio
+                        }
+                    ));
+                } else {
+                    result.push((self.records[i].clone(), srec.clone()));
+                }
                 break;
+            } else {
+                result.push((self.records[i].clone(), srec.clone()));
             }
         }
 
         if amount < sell_target {
-            return Err(AccountError(format!("Insufficient funds.")))
+            return Err(AccountError(format!("Insufficient funds.")));
         }
 
         Ok(result)
@@ -168,7 +201,10 @@ fn print_sell_summary(mut summary: Vec<(Record, SellRecord)>, tax_rate: f64) {
     let mut amount = 0.0;
     let mut cap_gains = 0.0;
     for (record, sell_record) in summary {
-        println!("  {}, {}, {} shares", record.date, record.fund, record.num_shares);
+        println!(
+            "  {},\t{},\t{} shares",
+            record.date, record.fund, record.num_shares
+        );
         amount += sell_record.amount;
         cap_gains += sell_record.cap_gains;
     }
@@ -177,8 +213,8 @@ fn print_sell_summary(mut summary: Vec<(Record, SellRecord)>, tax_rate: f64) {
     println!("amount: {:.2}", amount);
     println!("cap gains: {:.2}", cap_gains);
     if tax_rate != 0.0 {
-        println!("taxes: {:.2}", cap_gains*tax_rate);
-        println!("net amount: {:.2}", amount - cap_gains*tax_rate);
+        println!("taxes: {:.2}", cap_gains * tax_rate);
+        println!("net amount: {:.2}", amount - cap_gains * tax_rate);
     }
 }
 
@@ -192,18 +228,16 @@ fn run(filename: &String, target_amount: f64, tax_rate: f64) {
 
     // hardcode the fund prices for now
     let mut fund_prices: HashMap<String, f64> = HashMap::new();
-    fund_prices.insert(
-        "Total Stock Mkt Idx Adm".to_string(),
-        68.44);
-    fund_prices.insert(
-        "Tot Intl Stock Ix Admiral".to_string(),
-        30.31);
+    fund_prices.insert("Total Stock Mkt Idx Adm".to_string(), 68.44);
+    fund_prices.insert("Tot Intl Stock Ix Admiral".to_string(), 30.31);
 
     //let sell_records = account.make_sell_records(&fund_prices).unwrap();
     //for record in &sell_records {
     //    println!("{:?}", record);
     //}
-    let result = account.minimum_cap_gains(&fund_prices, target_amount, tax_rate).unwrap();
+    let result = account
+        .minimum_cap_gains(&fund_prices, target_amount, tax_rate)
+        .unwrap();
     print_sell_summary(result, tax_rate);
 }
 
@@ -224,7 +258,10 @@ fn main() {
         println!("using a tax rate of {}", tax_rate);
     }
 
-    println!("Reading file {} with a target sell amount of {}", filename, target_amount);
+    println!(
+        "Reading file {} with a target sell amount of {}",
+        filename, target_amount
+    );
 
     run(filename, target_amount, tax_rate);
     process::exit(0);
