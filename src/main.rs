@@ -243,9 +243,15 @@ fn print_sell_summary(mut summary: Vec<SellRecord>, tax_rate: f64) {
     let mut amount = 0.0;
     let mut cap_gains = 0.0;
     for srec in summary {
+        // print out when selling a whole number of shares as it's not too common
+        let whole = if srec.num_shares.fract() == 0.0 {
+            " [whole shares]"
+        } else {
+            ""
+        };
         println!(
-            "  {},\t{},\t{} shares",
-            srec.date_purchased, srec.fund, srec.num_shares
+            "  {},\t{},\t{} shares{}",
+            srec.date_purchased, srec.fund, srec.num_shares, whole
         );
         amount += srec.amount;
         cap_gains += srec.cap_gains;
