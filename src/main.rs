@@ -160,8 +160,10 @@ impl Account {
         let mut amount = 0.0;
         let mut cap_gains = 0.0;
         let mut result = Vec::new();
+
         for (_, i) in indices {
             sell_records.push(None);
+
             let srec = sell_records.swap_remove(i).unwrap();
             amount += srec.amount;
             cap_gains += srec.cap_gains;
@@ -246,7 +248,7 @@ fn print_sell_summary(mut summary: Vec<SellRecord>, tax_rate: f64) {
 
     let mut amount = 0.0;
     let mut cap_gains = 0.0;
-    println!("  {:>10}, {:>25}, {:>10}, {:>10}, {:>10}", "date", "fund", "amount", "cap gains", "shares");
+    println!("  {:>10}, {:>25}, {:>10}, {:>10}, {:>10}, {:>10}", "date", "fund", "amount", "cap gains", "cg ratio", "shares");
     for srec in summary {
         // print out when selling a whole number of shares as it's not too common
         let shares = if srec.num_shares.fract() == 0.0 {
@@ -255,8 +257,8 @@ fn print_sell_summary(mut summary: Vec<SellRecord>, tax_rate: f64) {
             format!("{:10.3}", srec.num_shares)
         };
         println!(
-            "  {}, {:>25}, {:10.3}, {:10.3}, {}",
-            srec.date_purchased, srec.fund, srec.amount, srec.cap_gains, shares
+            "  {}, {:>25}, {:10.3}, {:10.3}, {:10.3}, {}",
+            srec.date_purchased, srec.fund, srec.amount, srec.cap_gains, srec.cap_gains_ratio, shares
         );
         amount += srec.amount;
         cap_gains += srec.cap_gains;
