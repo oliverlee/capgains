@@ -175,6 +175,18 @@ impl Account {
             };
 
             if (amount - taxes) > sell_target {
+                // First try to minimize capital gains near zero. That is,
+                // don't sell some shares with large, negative cap gains ratio.
+                if cap_gains < 0.0 {
+                    result.push(srec);
+
+                    let srec = result.remove(0);
+                    amount -= srec.amount;
+                    cap_gains -= srec.cap_gains;
+
+                    continue;
+                }
+
                 // see if we can sell some (not all) of the shares of this record
                 let mut x = srec.amount;
 
