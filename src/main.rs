@@ -168,19 +168,35 @@ impl Account {
             amount += srec.amount;
             cap_gains += srec.cap_gains;
 
-            // TODO: handle negative cap gains
-            if (amount - cap_gains * tax_rate) > sell_target {
+            let taxes = if cap_gains > 0.0 {
+                cap_gains * tax_rate
+            } else {
+                0.0
+            };
+
+            if (amount - taxes) > sell_target {
                 // see if we can sell some (not all) of the shares of this record
-                let mut x = srec.amount - srec.cap_gains * tax_rate;
+                let mut x = srec.amount;
+
+                if taxes > 0.0 && srec.cap_gains > 0.0 {
+                    x -= srec.cap_gains * tax_rate;
+                }
+
                 x /= srec.num_shares;
 
-                // get pre-record values for amount and cap gains
+                // get incremental record values for amount and cap gains and taxes
                 let a = amount - srec.amount;
                 let c = cap_gains - srec.cap_gains;
+                let t = if c > 0.0 {
+                    c * tax_rate
+                } else {
+                    0.0
+                };
 
                 // get number of shares needed to reach sell target
                 // shares can only be sold as integer amounts
-                let n = ((sell_target - (a - c * tax_rate)) / x).trunc() + 1.0;
+                // FIXME tax calculation in-case capital gains are offset by capital losses
+                let n = ((sell_target - (a - t)) / x).trunc() + 1.0;
 
                 if n < srec.num_shares.trunc() {
                     result.push(
@@ -267,7 +283,7 @@ fn print_sell_summary(mut summary: Vec<SellRecord>, tax_rate: f64) {
     println!("will result in");
     println!("amount:     {:10.3}", amount);
     println!("cap gains:  {:10.3}", cap_gains);
-    if tax_rate != 0.0 {
+    if tax_rate != 0.0 && cap_gains > 0.0 {
         println!("taxes:      {:10.3}", cap_gains * tax_rate);
         println!("net amount: {:10.3}", amount - cap_gains * tax_rate);
     }
